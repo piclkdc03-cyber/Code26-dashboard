@@ -151,12 +151,37 @@ function drawCharts(d){Object.values(charts).forEach(c=>c.destroy());charts={};
   const last5=allWeeks.slice(-5);
   const costVals=last5.map(x=>bwCost[x]||0);
   const cntVals=last5.map(x=>bwCount[x]||0);
+  // plugin: draw value labels on line points and bar tops
+  const trendLabels={id:'trendLabels',afterDatasetsDraw(c){
+    const ctx=c.ctx;
+    c.data.datasets.forEach((ds,di)=>{
+      const meta=c.getDatasetMeta(di);
+      meta.data.forEach((el,i)=>{
+        const v=ds.data[i]; if(v==null)return;
+        ctx.save();
+        ctx.textAlign='center';
+        if(ds.type==='bar'){
+          ctx.fillStyle='#b45309';
+          ctx.font='bold 12px Segoe UI, Sarabun';
+          ctx.textBaseline='bottom';
+          ctx.fillText(v+' เคส', el.x, el.y-4);
+        } else {
+          ctx.fillStyle='#1d4ed8';
+          ctx.font='bold 12px Segoe UI, Sarabun';
+          ctx.textBaseline='bottom';
+          ctx.fillText('฿'+Math.round(v).toLocaleString(), el.x, el.y-10);
+        }
+        ctx.restore();
+      });
+    });
+  }};
   charts.t=new Chart($('cTrend'),{
     data:{labels:last5,datasets:[
       {type:'bar',label:'จำนวนรายการ (เคส)',data:cntVals,backgroundColor:'#f59e0b',yAxisID:'y1',order:2,borderRadius:4},
       {type:'line',label:'มูลค่าความเสียหาย (฿)',data:costVals,borderColor:'#2563eb',backgroundColor:'#2563eb22',fill:true,tension:.35,pointRadius:5,pointBackgroundColor:'#2563eb',borderWidth:3,yAxisID:'y',order:1}
     ]},
     options:{
+      layout:{padding:{top:24}},
       interaction:{mode:'index',intersect:false},
       plugins:{
         legend:{display:true,position:'top',labels:{boxWidth:14,font:{size:12},usePointStyle:false}},
@@ -165,17 +190,28 @@ function drawCharts(d){Object.values(charts).forEach(c=>c.destroy());charts={};
           return ' จำนวน: '+c.parsed.y+' เคส';}}}
       },
       scales:{
-        y:{position:'left',beginAtZero:true,title:{display:true,text:'มูลค่า (฿)'},ticks:{callback:v=>v.toLocaleString()}},
-        y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'จำนวนเคส'},ticks:{precision:0}}
+        y:{position:'left',beginAtZero:true,title:{display:true,text:'มูลค่า (฿)'},ticks:{callback:v=>v.toLocaleString()},grace:'12%'},
+        y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'จำนวนเคส'},ticks:{precision:0},grace:'20%'}
       }
-    }});
+    },plugins:[trendLabels]});
   const bc=agg(d,'cause','cost');const ck=Object.keys(bc).sort((a,b)=>bc[b]-bc[a]);const tot=ck.reduce((a,k)=>a+bc[k],0);
   charts.c=new Chart($('cCause'),{type:'doughnut',data:{labels:ck.map(k=>k+' ('+(bc[k]/tot*100).toFixed(1)+'%)'),datasets:[{data:ck.map(k=>bc[k]),backgroundColor:COLORS,borderWidth:2,borderColor:'#fff'}]},
     options:{plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:{label:c=>c.label+': '+baht(c.parsed)}}}},plugins:[pctPlugin]});
   const bd2=agg(d,'desc','cost');const dk=Object.entries(bd2).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  charts.top=new Chart($('cTop'),{type:'bar',data:{labels:dk.map(x=>x[0].length>22?x[0].slice(0,22)+'…':x[0]),datasets:[{label:'มูลค่า ฿',data:dk.map(x=>x[1]),backgroundColor:'#0ea5e9'}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>dk[items[0].dataIndex][0]}}},scales:{x:{beginAtZero:true},y:{ticks:{font:{size:10}}}}}});
+  const barLabels={id:'barLabels',afterDatasetsDraw(c){const ctx=c.ctx;const meta=c.getDatasetMeta(0);
+    meta.data.forEach((el,i)=>{const v=c.data.datasets[0].data[i];if(v==null)return;
+      ctx.save();ctx.fillStyle='#0369a1';ctx.font='bold 11px Segoe UI, Sarabun';ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.fillText('฿'+Math.round(v).toLocaleString(),el.x+6,el.y);ctx.restore();});}};
+  charts.top=new Chart($('cTop'),{type:'bar',data:{labels:dk.map(x=>x[0].length>22?x[0].slice(0,22)+'…':x[0]),datasets:[{label:'มูลค่า ฿',data:dk.map(x=>x[1]),backgroundColor:'#0ea5e9',borderRadius:4}]},options:{indexAxis:'y',layout:{padding:{right:60}},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>dk[items[0].dataIndex][0]}}},scales:{x:{beginAtZero:true,grace:'12%'},y:{ticks:{font:{size:10}}}}},plugins:[barLabels]});
   const shs=['J1','J2','J3'];const sc=shs.map(s=>d.filter(r=>r.shift===s).length);const sco=shs.map(s=>d.filter(r=>r.shift===s).reduce((a,r)=>a+r.cost,0));
-  charts.s=new Chart($('cShift'),{data:{labels:shs,datasets:[{type:'bar',label:'จำนวนเคส',data:sc,backgroundColor:'#f59e0b',yAxisID:'y'},{type:'line',label:'มูลค่า ฿',data:sco,borderColor:'#ef4444',backgroundColor:'#ef444422',yAxisID:'y1',tension:.3}]},options:{scales:{y:{position:'left',beginAtZero:true,title:{display:true,text:'เคส'}},y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'฿'}}}}});}
+  const shiftLabels={id:'shiftLabels',afterDatasetsDraw(c){const ctx=c.ctx;
+    c.data.datasets.forEach((ds,di)=>{const meta=c.getDatasetMeta(di);
+      meta.data.forEach((el,i)=>{const v=ds.data[i];if(v==null)return;
+        ctx.save();ctx.textAlign='center';ctx.textBaseline='bottom';ctx.font='bold 11px Segoe UI, Sarabun';
+        if(ds.type==='bar'){ctx.fillStyle='#b45309';ctx.fillText(v+' เคส',el.x,el.y-4);}
+        else{ctx.fillStyle='#b91c1c';ctx.fillText('฿'+Math.round(v).toLocaleString(),el.x,el.y-8);}
+        ctx.restore();});});}};
+  charts.s=new Chart($('cShift'),{data:{labels:shs,datasets:[{type:'bar',label:'จำนวนเคส',data:sc,backgroundColor:'#f59e0b',yAxisID:'y',borderRadius:4},{type:'line',label:'มูลค่า ฿',data:sco,borderColor:'#ef4444',backgroundColor:'#ef444422',yAxisID:'y1',tension:.3,pointRadius:5,pointBackgroundColor:'#ef4444',borderWidth:3}]},options:{layout:{padding:{top:24}},interaction:{mode:'index',intersect:false},scales:{y:{position:'left',beginAtZero:true,title:{display:true,text:'เคส'},grace:'20%'},y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'฿'},grace:'20%'}}},plugins:[shiftLabels]});}
 function renderTable(d){const s=[...d].sort((a,b)=>{let x=a[sortK],y=b[sortK];if(sortK==='cost'||sortK==='qty')return(x-y)*sortDir;return(''+x).localeCompare(''+y,'th')*sortDir});
   $('rowCount').textContent=d.length;
   $('tbody').innerHTML=s.map(r=>{const cls=CAUSE_CLASS[r.cause]||'b-other';
